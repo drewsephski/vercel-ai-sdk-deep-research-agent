@@ -2,6 +2,9 @@ import { metadata, task } from "@trigger.dev/sdk";
 import { generateText } from "ai";
 import { mainModel } from "./deepResearch";
 
+// Type assertion for AI SDK compatibility
+const model = mainModel as any;
+
 function stripMarkdownCodeFences(text: string): string {
   // Only strip markdown code fences - don't transform content
   let cleaned = text.replace(/^```html\s*/i, "");
@@ -59,30 +62,41 @@ export const generateReport = task({
       label: "Generating report...",
     });
 
+    // Sort sources by quality score so the model sees best sources first
+    const sortedSources = [...(research.searchResults || [])].sort(
+      (a: any, b: any) => (b.qualityScore ?? 5) - (a.qualityScore ?? 5)
+    );
+
+    const topSources = sortedSources.slice(0, 15); // Limit to top 15 sources for context window
+
     const { text } = await generateText({
-      model: mainModel,
+      model: model,
       prompt: `Research Query: "${research.query}"
 
 Key Findings and Learnings:
 ${
-        research.learnings.map((learning, i) =>
+        (research.learnings || []).map((learning: any, i: number) =>
           `${i + 1}. ${learning.learning}
-   Follow-up: ${learning.followUpQuestions.join(", ")}`
+   Follow-up: ${(learning.followUpQuestions || []).join(", ")}`
         ).join("\n\n")
       }
 
-Sources Used:
+Sources (most authoritative first):
 ${
-        research.searchResults.map((source, i) =>
+        topSources.map((source: any, i: number) =>
           `${i + 1}. ${source.title}
    URL: ${source.url}
-   Content: ${source.content.substring(0, 500)}...`
+   Content: ${(source.content || '').substring(0, 800)}...`
         ).join("\n\n")
       }
 
-Generate a comprehensive research report based on this complete research data. Output clean HTML body content only (no html/head/body tags - the system will wrap it). Do NOT use markdown formatting or code fences - return pure HTML only.`,
+Generate a comprehensive research report. In your analysis, prioritize insights from the earliest-listed sources (they are the most authoritative). Cross-reference findings across multiple sources when possible, and note any contradictions.
+
+In the Sources and References section, list each source by title and URL only. Do NOT mention any numerical scores, ratings, or quality assessments in the report text or references.
+
+Output clean HTML body content only (no html/head/body tags). Do NOT use markdown formatting or code fences - return pure HTML only.`,
       system: SYSTEM_PROMPT,
-      maxTokens: 6000, // Increased to prevent HTML truncation mid-tag
+      maxOutputTokens: 8000,
     });
 
     console.log("Raw AI output:", text);
