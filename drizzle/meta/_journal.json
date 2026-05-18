@@ -22,6 +22,20 @@
       "when": 1779134799178,
       "tag": "0002_daily_stephen_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779144592121,
+      "tag": "0003_wealthy_captain_universe",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779145171580,
+      "tag": "0004_complete_bloodstrike",
+      "breakpoints": true
     }
   ]
 }

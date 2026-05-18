@@ -6,6 +6,7 @@ import { generateReport } from "./generateReport";
 import { Exa } from "exa-js";
 import { z } from "zod";
 import { saveResearchSession } from "@/lib/research-sessions";
+import { canStartResearch, incrementSessionUsage } from "@/lib/subscriptions";
 
 // You can change this to any other model available on the AI SDK
 // Type assertion to resolve OpenRouter/AI SDK version compatibility
@@ -116,6 +117,41 @@ export const deepResearchOrchestrator = schemaTask({
     userId: z.string().optional(), // Clerk user ID
   }),
   run: async (payload) => {
+    // Check if user can start research
+    if (payload.userId) {
+      const check = await canStartResearch(payload.userId);
+
+      if (!check.allowed) {
+        throw new Error(check.reason || 'Unable to start research. Please upgrade your plan.');
+      }
+
+      // Validate depth/breadth against plan limits if user has a subscription
+      const requestedDepth = payload.depth ?? 2;
+      const requestedBreadth = payload.breadth ?? 2;
+
+      if (check.subscription) {
+        if (requestedDepth > check.subscription.maxDepth) {
+          throw new Error(`Requested depth (${requestedDepth}) exceeds your plan limit (${check.subscription.maxDepth}). Please upgrade to access deeper research.`);
+        }
+
+        if (requestedBreadth > check.subscription.maxBreadth) {
+          throw new Error(`Requested breadth (${requestedBreadth}) exceeds your plan limit (${check.subscription.maxBreadth}). Please upgrade to access broader research.`);
+        }
+      } else {
+        // Free tier limits (depth 1, breadth 2)
+        if (requestedDepth > 1) {
+          throw new Error(`Requested depth (${requestedDepth}) exceeds free tier limit (1). Please upgrade to access deeper research.`);
+        }
+
+        if (requestedBreadth > 2) {
+          throw new Error(`Requested breadth (${requestedBreadth}) exceeds free tier limit (2). Please upgrade to access broader research.`);
+        }
+      }
+
+      // Increment session usage
+      await incrementSessionUsage(payload.userId);
+    }
+
     metadata.set("status", {
       progress: 0,
       label: `Researching ${payload.prompt}. Depth: ${

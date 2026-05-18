@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { SignInButton, SignOutButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
-import { Telescope, LayoutDashboard } from "lucide-react";
+import { Telescope, LayoutDashboard, CreditCard } from "lucide-react";
 
 export function Nav() {
   const { isSignedIn, user } = useUser();
@@ -26,6 +26,12 @@ export function Nav() {
                     Dashboard
                   </Link>
                 </Button>
+                <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-white font-normal">
+                  <Link href="/pricing" className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" strokeWidth={1.5} />
+                    Pricing
+                  </Link>
+                </Button>
                 <div className="h-4 w-px bg-border mx-2" />
                 <span className="text-sm text-muted-foreground hidden sm:inline">
                   {user?.firstName || user?.emailAddresses[0]?.emailAddress}
@@ -37,9 +43,17 @@ export function Nav() {
                 </SignOutButton>
               </>
             ) : (
-              <SignInButton>
-                <Button size="sm" className="font-medium">Sign In</Button>
-              </SignInButton>
+              <>
+                <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-white font-normal">
+                  <Link href="/pricing" className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" strokeWidth={1.5} />
+                    Pricing
+                  </Link>
+                </Button>
+                <SignInButton>
+                  <Button size="sm" className="font-medium">Sign In</Button>
+                </SignInButton>
+              </>
             )}
           </div>
         </div>

@@ -1,12 +1,16 @@
 "use client";
 
 import { ClarifyingChat } from "@/components/ClarifyingChat";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProgressSection } from "@/components/progress-section";
+import { PaywallModal } from "@/components/PaywallModal";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { useRealtimeTaskTrigger } from "@trigger.dev/react-hooks";
-import { Search, Telescope, FileText } from "lucide-react";
-import { useState } from "react";
+import { Search, Telescope, FileText, Layers, GitBranch, CreditCard } from "lucide-react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useUser } from "@clerk/nextjs";
 
@@ -26,12 +30,26 @@ export function parseStatus(data: unknown): ProgressMetadata {
 
 type Phase = "input" | "clarify" | "research";
 
+interface Subscription {
+  plan: string;
+  maxDepth: number;
+  maxBreadth: number;
+  sessionsUsed: number;
+  sessionsLimit: number | null;
+}
+
 export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
   const { user } = useUser();
   const [prompt, setPrompt] = useState("");
   const [promptError, setPromptError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("input");
   const [refinedPrompt, setRefinedPrompt] = useState("");
+  const [depth, setDepth] = useState([2]);
+  const [breadth, setBreadth] = useState([2]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [freeCredits, setFreeCredits] = useState<number | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const triggerInstance = useRealtimeTaskTrigger<any>(
     "deep-research",
@@ -54,11 +72,68 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
     pdfTitle = pdfName || "";
   }
 
+  // Fetch subscription data on mount
+  useEffect(() => {
+    async function fetchData() {
+      if (!user) return;
+      
+      try {
+        // Fetch subscription
+        const subResponse = await fetch('/api/subscription');
+        const subData = await subResponse.json();
+        
+        if (subData.subscription) {
+          setSubscription(subData.subscription);
+          // Set depth/breadth to plan defaults if they exceed limits
+          if (subData.subscription.maxDepth < depth[0]) {
+            setDepth([subData.subscription.maxDepth]);
+          }
+          if (subData.subscription.maxBreadth < breadth[0]) {
+            setBreadth([subData.subscription.maxBreadth]);
+          }
+        } else {
+          // Fetch free credits if no subscription
+          const creditsResponse = await fetch('/api/user/credits');
+          const creditsData = await creditsResponse.json();
+          setFreeCredits(creditsData.freeCredits);
+          
+          // Free tier limits (depth 1, breadth 2)
+          setDepth([1]);
+          setBreadth([2]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      } finally {
+        setSubscriptionLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [user]);
+
+  // Update depth/breadth when subscription changes
+  useEffect(() => {
+    if (subscription) {
+      if (subscription.maxDepth < depth[0]) {
+        setDepth([subscription.maxDepth]);
+      }
+      if (subscription.maxBreadth < breadth[0]) {
+        setBreadth([subscription.maxBreadth]);
+      }
+    }
+  }, [subscription]);
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (prompt.length < 30) {
       setPromptError("Research prompt must be at least 30 characters.");
+      return;
+    }
+
+    // Check if user has free credits if not subscribed
+    if (!subscription && freeCredits !== null && freeCredits <= 0) {
+      setShowPaywall(true);
       return;
     }
 
@@ -72,6 +147,8 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
     triggerInstance.submit({
       prompt: refined,
       userId: user?.id || undefined,
+      depth: depth[0],
+      breadth: breadth[0],
     });
   };
 
@@ -100,7 +177,7 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="relative">
                 <Textarea
                   id="prompt"
@@ -114,6 +191,85 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
                 </div>
               </div>
 
+              {/* Depth and Breadth Sliders */}
+              {!subscriptionLoading && subscription && (
+                <div className="space-y-5 p-4 rounded-lg bg-muted/30 border border-border/50">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {subscription.plan === 'starter' && 'Starter Plan'}
+                      {subscription.plan === 'pro' && 'Pro Plan'}
+                      {subscription.plan === 'power' && 'Power Plan'}
+                    </span>
+                    {subscription.sessionsLimit && (
+                      <span className="text-muted-foreground">
+                        {subscription.sessionsUsed}/{subscription.sessionsLimit} sessions used
+                      </span>
+                    )}
+                    {!subscription.sessionsLimit && (
+                      <span className="text-muted-foreground">Unlimited sessions</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="depth" className="text-sm flex items-center gap-2">
+                          <Layers className="w-4 h-4" />
+                          Depth: {depth[0]}
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          Max: {subscription.maxDepth}
+                        </span>
+                      </div>
+                      <Slider
+                        id="depth"
+                        min={1}
+                        max={subscription.maxDepth}
+                        step={1}
+                        value={depth}
+                        onValueChange={setDepth}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        How deep to research (levels of follow-up queries)
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="breadth" className="text-sm flex items-center gap-2">
+                          <GitBranch className="w-4 h-4" />
+                          Breadth: {breadth[0]}
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          Max: {subscription.maxBreadth}
+                        </span>
+                      </div>
+                      <Slider
+                        id="breadth"
+                        min={1}
+                        max={subscription.maxBreadth}
+                        step={1}
+                        value={breadth}
+                        onValueChange={setBreadth}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        How many parallel searches per level
+                      </p>
+                    </div>
+                  </div>
+
+                  {subscription.plan === 'starter' && (
+                    <div className="text-xs text-muted-foreground text-center">
+                      <a href="/pricing" className="text-primary hover:underline">
+                        Upgrade to Pro for deeper research
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {promptError && (
                 <p className="text-sm font-medium text-destructive animate-fade-in">
                   {promptError}
@@ -121,12 +277,22 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
               )}
 
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Minimum 30 characters required
-                </p>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    Minimum 30 characters required
+                  </p>
+                  {freeCredits !== null && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+                      <CreditCard className="w-3.5 h-3.5 text-primary" strokeWidth={1.5} />
+                      <span className="text-xs font-medium text-primary">
+                        {freeCredits} free credits
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <Button
                   type="submit"
-                  disabled={isSubmitDisabled}
+                  disabled={isSubmitDisabled || subscriptionLoading}
                   className="font-medium px-5"
                 >
                   <Search className="w-4 h-4 mr-2" strokeWidth={1.5} />
@@ -138,11 +304,13 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
         )}
 
         {phase === "clarify" && (
-          <ClarifyingChat
-            initialPrompt={prompt}
-            onResearchStart={handleResearchStart}
-            onBack={handleBack}
-          />
+          <ErrorBoundary>
+            <ClarifyingChat
+              initialPrompt={prompt}
+              onResearchStart={handleResearchStart}
+              onBack={handleBack}
+            />
+          </ErrorBoundary>
         )}
 
         {phase === "research" && run && run.status !== "COMPLETED" && (
@@ -193,6 +361,8 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
             </Button>
           </div>
         )}
+
+        <PaywallModal open={showPaywall} onOpenChange={setShowPaywall} />
       </div>
     </div>
   );

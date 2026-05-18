@@ -1,9 +1,10 @@
 import { requireAuth } from '@/lib/auth';
 import { getUserResearchSessions } from '@/lib/research-sessions';
+import { getUserSubscription, getUserFreeCredits } from '@/lib/subscriptions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Calendar, ExternalLink, ArrowLeft, Trash2 } from 'lucide-react';
+import { FileText, Calendar, ExternalLink, ArrowLeft, Trash2, Zap, Crown } from 'lucide-react';
 import Link from 'next/link';
 import DeleteDialog from '@/components/DeleteDialog';
 import parse from 'html-react-parser';
@@ -11,10 +12,66 @@ import parse from 'html-react-parser';
 export default async function DashboardPage() {
   const user = await requireAuth();
   const sessions = await getUserResearchSessions(user.id);
+  const subscription = await getUserSubscription(user.id);
+  const freeCredits = await getUserFreeCredits(user.id);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto p-6 space-y-8">
+        {/* Subscription Banner */}
+        {subscription ? (
+          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {subscription.plan === 'power' && <Crown className="w-5 h-5 text-amber-500" />}
+                  {subscription.plan === 'pro' && <Zap className="w-5 h-5 text-primary" />}
+                  {subscription.plan === 'starter' && <FileText className="w-5 h-5 text-muted-foreground" />}
+                  <div>
+                    <p className="font-semibold capitalize">{subscription.plan} Plan</p>
+                    <p className="text-sm text-muted-foreground">
+                      {subscription.sessionsLimit
+                        ? `${subscription.sessionsUsed}/${subscription.sessionsLimit} sessions used this month`
+                        : 'Unlimited sessions'}
+                    </p>
+                  </div>
+                </div>
+                {subscription.plan !== 'power' && (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/pricing">Upgrade</Link>
+                  </Button>
+                )}
+                {subscription.stripeCustomerId && (
+                  <form action="/api/portal" method="POST">
+                    <Button size="sm" variant="ghost">
+                      Manage Billing
+                    </Button>
+                  </form>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-semibold">Free Plan</p>
+                    <p className="text-sm text-muted-foreground">
+                      {freeCredits} free credits remaining
+                    </p>
+                  </div>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/pricing">Upgrade</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Research Dashboard</h1>

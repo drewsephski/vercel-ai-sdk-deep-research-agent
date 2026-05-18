@@ -37,6 +37,9 @@ const tools = {
         .describe("Whether the user can select multiple options")
         .default(false),
     }),
+    execute: async ({ question, options, allowsMultiple }) => {
+      return { question, options, allowsMultiple };
+    },
   }),
 
   finalizeResearchPlan: tool({

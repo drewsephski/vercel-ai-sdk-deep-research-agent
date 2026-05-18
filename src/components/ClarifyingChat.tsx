@@ -6,7 +6,7 @@ import {
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { CheckCircle2, ChevronRight, Lightbulb, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronRight, Lightbulb, Sparkles, AlertCircle, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ClarifyingChatProps {
@@ -26,13 +26,117 @@ export function ClarifyingChat({
     refinedPrompt: string;
     focusAreas: string[];
   } | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [totalQuestions, setTotalQuestions] = useState(3); // Estimate, AI can ask up to 3
 
-  const { messages, sendMessage, addToolOutput, status } = useChat({
+  // LocalStorage persistence key
+  const STORAGE_KEY = `clarification_${initialPrompt.slice(0, 20).replace(/\s+/g, '_')}`;
+
+  // Save state to localStorage
+  const saveToLocalStorage = (key: string, value: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.warn("Failed to save to localStorage:", e);
+    }
+  };
+
+  // Load state from localStorage
+  const loadFromLocalStorage = (key: string) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch (e) {
+      console.warn("Failed to load from localStorage:", e);
+      return null;
+    }
+  };
+
+  // Clear localStorage for this session
+  const clearLocalStorage = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn("Failed to clear localStorage:", e);
+    }
+  };
+
+  // Restore state from localStorage on mount
+  useEffect(() => {
+    const saved = loadFromLocalStorage(STORAGE_KEY);
+    if (saved) {
+      if (saved.selectedOptions) setSelectedOptions(saved.selectedOptions);
+      if (saved.submittedToolCallIds) setSubmittedToolCallIds(new Set(saved.submittedToolCallIds));
+      if (saved.finalPlan) setFinalPlan(saved.finalPlan);
+      if (saved.questionCount) setQuestionCount(saved.questionCount);
+    }
+  }, [STORAGE_KEY]);
+
+  // Auto-save state to localStorage when it changes
+  useEffect(() => {
+    if (selectedOptions) {
+      saveToLocalStorage(STORAGE_KEY, {
+        selectedOptions,
+        submittedToolCallIds: Array.from(submittedToolCallIds),
+        finalPlan,
+        questionCount,
+      });
+    }
+  }, [selectedOptions, submittedToolCallIds, finalPlan, questionCount, STORAGE_KEY]);
+
+  // Clear localStorage when research starts or user goes back
+  useEffect(() => {
+    return () => {
+      clearLocalStorage();
+    };
+  }, []);
+
+  const { messages, sendMessage, addToolOutput, status, error: chatError } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/clarify",
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
+
+  // Handle chat errors
+  useEffect(() => {
+    if (chatError) {
+      console.error("Chat error:", chatError);
+      setError(chatError);
+    }
+  }, [chatError]);
+
+  const handleRetry = () => {
+    setError(null);
+    // Clear messages and restart the conversation
+    sendMessage({
+      text: `I want to research: "${initialPrompt}"`,
+    });
+  };
+
+  const handleSkipQuestion = (toolCallId: string, question: string) => {
+    const skipMessage = `For "${question}", I'd like to skip this question.`;
+    addToolOutput({
+      tool: "askClarifyingQuestion",
+      toolCallId,
+      output: skipMessage,
+    });
+    setSubmittedToolCallIds((prev) => new Set(prev).add(toolCallId));
+  };
+
+  // Track question count from messages
+  useEffect(() => {
+    const questionToolCalls = messages.flatMap((m) =>
+      m.parts.filter((p) => p.type === "tool-askClarifyingQuestion")
+    );
+    const currentQuestionCount = questionToolCalls.length;
+    if (currentQuestionCount > questionCount) {
+      setQuestionCount(currentQuestionCount);
+    }
+  }, [messages, questionCount]);
+
+  const isLoading = status === "submitted" || status === "streaming";
 
   // Auto-send the initial prompt on mount
   useEffect(() => {
@@ -43,7 +147,70 @@ export function ClarifyingChat({
     }
   }, [status, messages.length, initialPrompt, sendMessage]);
 
-  const isLoading = status === "submitted" || status === "streaming";
+  // Display error state
+  if (error) {
+    return (
+      <div className="w-full max-w-2xl mx-auto animate-fade-up space-y-6">
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-destructive/5">
+            <AlertCircle className="w-5 h-5 text-destructive" strokeWidth={1.5} />
+          </div>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Connection Error
+          </h2>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">
+            {error.message || "Failed to connect to the clarification service. Please check your connection and try again."}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-3">
+          <Button variant="outline" size="sm" onClick={onBack}>
+            Back
+          </Button>
+          <Button size="sm" onClick={handleRetry}>
+            <RefreshCw className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Display loading skeleton while waiting for first question
+  if (isLoading && messages.length === 0) {
+    return (
+      <div className="w-full max-w-2xl mx-auto space-y-6">
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/5">
+            <Lightbulb className="w-5 h-5 text-primary animate-pulse" strokeWidth={1.5} />
+          </div>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Analyzing your query...
+          </h2>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">
+            Preparing clarifying questions to focus your research.
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-card p-5 space-y-4">
+          <div className="space-y-3">
+            <div className="h-4 w-1/3 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-2/3 bg-muted rounded animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-12 w-full bg-muted/50 rounded-lg animate-pulse" />
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <div className="h-9 w-20 bg-muted rounded animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleOptionToggle = (
     toolCallId: string,
@@ -245,6 +412,20 @@ export function ClarifyingChat({
                         key={callId}
                         className="rounded-xl border bg-card p-5 space-y-4 animate-fade-in"
                       >
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Question {questionCount} of {totalQuestions}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-muted-foreground hover:text-white"
+                            onClick={() => handleSkipQuestion(callId, input.question)}
+                          >
+            Skip
+          </Button>
+        </div>
+
                         <p className="text-sm font-medium">{input.question}</p>
 
                         <div className="space-y-2">
@@ -283,7 +464,15 @@ export function ClarifyingChat({
                           })}
                         </div>
 
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="hover:text-white"
+                            onClick={() => handleSkipQuestion(callId, input.question)}
+                          >
+            Skip
+          </Button>
                           <Button
                             size="sm"
                             disabled={selected.length === 0 || isLoading}
