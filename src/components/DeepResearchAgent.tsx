@@ -1,5 +1,6 @@
 "use client";
 
+import { ClarifyingChat } from "@/components/ClarifyingChat";
 import { ProgressSection } from "@/components/progress-section";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,10 +24,14 @@ export function parseStatus(data: unknown): ProgressMetadata {
   return ProgressMetadataSchema.parse(data);
 }
 
+type Phase = "input" | "clarify" | "research";
+
 export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
   const { user } = useUser();
   const [prompt, setPrompt] = useState("");
   const [promptError, setPromptError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("input");
+  const [refinedPrompt, setRefinedPrompt] = useState("");
 
   const triggerInstance = useRealtimeTaskTrigger<any>(
     "deep-research",
@@ -58,19 +63,30 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
     }
 
     setPromptError(null);
+    setPhase("clarify");
+  };
+
+  const handleResearchStart = (refined: string, _focusAreas: string[]) => {
+    setRefinedPrompt(refined);
+    setPhase("research");
     triggerInstance.submit({
-      prompt,
+      prompt: refined,
       userId: user?.id || undefined,
     });
   };
 
+  const handleBack = () => {
+    setPhase("input");
+  };
+
   const isSubmitDisabled = prompt.length < 30 || prompt.length > 1000;
   const charCount = prompt.length;
+  const displayPrompt = refinedPrompt || prompt;
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-16">
       <div className="w-full max-w-2xl mx-auto animate-fade-up">
-        {!run && (
+        {phase === "input" && (
           <>
             <div className="text-center mb-10">
               <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/5 mb-5">
@@ -114,23 +130,31 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
                   className="font-medium px-5"
                 >
                   <Search className="w-4 h-4 mr-2" strokeWidth={1.5} />
-                  Start Research
+                  Continue
                 </Button>
               </div>
             </form>
           </>
         )}
 
-        {run && run.status !== "COMPLETED" && (
+        {phase === "clarify" && (
+          <ClarifyingChat
+            initialPrompt={prompt}
+            onResearchStart={handleResearchStart}
+            onBack={handleBack}
+          />
+        )}
+
+        {phase === "research" && run && run.status !== "COMPLETED" && (
           <ProgressSection
-            prompt={prompt}
+            prompt={displayPrompt}
             status={run?.status || " "}
             progress={progress}
             message={label}
           />
         )}
 
-        {run && run.status === "COMPLETED" && (
+        {phase === "research" && run && run.status === "COMPLETED" && (
           <div className="text-center space-y-6 animate-fade-up">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/5 mb-2">
               <FileText className="w-5 h-5 text-primary" strokeWidth={1.5} />
@@ -138,7 +162,7 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">Research Complete</h2>
               <p className="text-muted-foreground text-[15px] max-w-lg mx-auto leading-relaxed">
-                Your report on <span className="text-foreground font-medium">&ldquo;{prompt}&rdquo;</span> is ready.
+                Your report on <span className="text-foreground font-medium">&ldquo;{displayPrompt}&rdquo;</span> is ready.
               </p>
             </div>
             <Button asChild className="font-medium px-5">
@@ -154,7 +178,7 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
           </div>
         )}
 
-        {run?.status === "FAILED" && (
+        {phase === "research" && run?.status === "FAILED" && (
           <div className="text-center space-y-4 animate-fade-up">
             <h2 className="text-xl font-semibold text-destructive">Research Failed</h2>
             <p className="text-muted-foreground text-[15px]">

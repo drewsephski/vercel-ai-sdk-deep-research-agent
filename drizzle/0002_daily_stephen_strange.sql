@@ -1,0 +1,1 @@
+ALTER TABLE "research_sessions" ADD COLUMN "clarifying_questions" jsonb;

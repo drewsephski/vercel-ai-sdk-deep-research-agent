@@ -18,6 +18,7 @@ export const researchSessions = pgTable('research_sessions', {
   report: text('report'),
   pdfUrl: text('pdf_url'),
   researchData: jsonb('research_data'),
+  clarifyingQuestions: jsonb('clarifying_questions'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

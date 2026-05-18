@@ -11,6 +11,7 @@ export async function saveResearchSession(data: {
   report?: string;
   pdfUrl?: string;
   researchData?: any;
+  clarifyingQuestions?: any;
 }) {
   const [session] = await db
     .insert(researchSessions)
@@ -23,6 +24,7 @@ export async function saveResearchSession(data: {
       report: data.report,
       pdfUrl: data.pdfUrl,
       researchData: data.researchData,
+      clarifyingQuestions: data.clarifyingQuestions,
     })
     .returning();
 
