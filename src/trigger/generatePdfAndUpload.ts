@@ -107,7 +107,7 @@ function parseHtmlElements(html: string) {
   for (const block of blocks) {
     if (!block.trim()) continue;
     
-    const headingMatch = block.match(/<h([1-6])[^>]*>(.*?)<\/h[1-6]>/is);
+    const headingMatch = block.match(/<h([1-6])[^>]*>([\s\S]*?)<\/h[1-6]>/i);
     if (headingMatch) {
       elements.push({
         type: 'heading',
@@ -117,7 +117,7 @@ function parseHtmlElements(html: string) {
       continue;
     }
     
-    const pMatch = block.match(/<p[^>]*>(.*?)<\/p>/is);
+    const pMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
     if (pMatch) {
       const text = stripHtml(pMatch[1]).trim();
       if (text) {
@@ -129,7 +129,7 @@ function parseHtmlElements(html: string) {
       continue;
     }
     
-    const ulMatch = block.match(/<ul[^>]*>(.*?)<\/ul>/is);
+    const ulMatch = block.match(/<ul[^>]*>([\s\S]*?)<\/ul>/i);
     if (ulMatch) {
       const items = extractListItems(ulMatch[1]);
       if (items.length > 0) {
@@ -142,7 +142,7 @@ function parseHtmlElements(html: string) {
       continue;
     }
     
-    const olMatch = block.match(/<ol[^>]*>(.*?)<\/ol>/is);
+    const olMatch = block.match(/<ol[^>]*>([\s\S]*?)<\/ol>/i);
     if (olMatch) {
       const items = extractListItems(olMatch[1]);
       if (items.length > 0) {
@@ -155,7 +155,7 @@ function parseHtmlElements(html: string) {
       continue;
     }
     
-    const bqMatch = block.match(/<blockquote[^>]*>(.*?)<\/blockquote>/is);
+    const bqMatch = block.match(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/i);
     if (bqMatch) {
       elements.push({
         type: 'blockquote',
@@ -180,7 +180,7 @@ function parseHtmlElements(html: string) {
 // Extract list items from list HTML
 function extractListItems(listHtml: string): string[] {
   const items: string[] = [];
-  const liMatches = listHtml.match(/<li[^>]*>(.*?)<\/li>/gis);
+  const liMatches = listHtml.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
   if (liMatches) {
     for (const match of liMatches) {
       const text = stripHtml(match).trim();
@@ -208,14 +208,33 @@ function checkPageBreak(doc: jsPDF, yPosition: number, neededSpace: number, page
   return yPosition;
 }
 
+// Validate R2 config early for clear error messages
+function getR2Config() {
+  const endpoint = process.env.R2_ENDPOINT;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET;
+  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+
+  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) {
+    throw new Error(
+      "Missing R2 configuration. Required env vars: R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, NEXT_PUBLIC_R2_PUBLIC_URL"
+    );
+  }
+
+  return { endpoint, accessKeyId, secretAccessKey, bucket, publicUrl };
+}
+
+const r2Config = getR2Config();
+
 // Initialize S3 client
 const s3Client = new S3Client({
   // How to authenticate to R2: https://developers.cloudflare.com/r2/api/s3/tokens/
   region: "auto",
-  endpoint: process.env.R2_ENDPOINT,
+  endpoint: r2Config.endpoint,
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+    accessKeyId: r2Config.accessKeyId,
+    secretAccessKey: r2Config.secretAccessKey,
   },
 });
 
@@ -262,14 +281,14 @@ export const generatePdfAndUpload = task({
       const key = `${payload.name}.pdf`;
       await s3Client.send(
         new PutObjectCommand({
-          Bucket: process.env.R2_BUCKET,
+          Bucket: r2Config.bucket,
           Key: key,
           Body: pdfBuffer,
           ContentType: "application/pdf",
         }),
       );
 
-      const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
+      const publicUrl = `${r2Config.publicUrl}/${key}`;
 
       return {
         key,
