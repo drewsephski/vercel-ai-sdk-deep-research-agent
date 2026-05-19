@@ -10,17 +10,22 @@ const checkoutSchema = z.object({
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
-    const formData = await req.formData();
-    const plan = formData.get('plan') as string;
 
-    if (!plan || (plan !== 'pro' && plan !== 'power')) {
+    // Parse URL-encoded body reliably
+    const body = await req.text();
+    const params = new URLSearchParams(body);
+    const plan = params.get('plan');
+
+    // Validate with Zod schema
+    const validation = checkoutSchema.safeParse({ plan });
+    if (!validation.success) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
-    const priceId = getPlanPriceId(plan as 'pro' | 'power');
+    const priceId = getPlanPriceId(validation.data.plan);
 
     if (!priceId) {
-      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid plan configuration' }, { status: 400 });
     }
 
     const session = await createStripeCheckoutSession(user.id, priceId, user.email);

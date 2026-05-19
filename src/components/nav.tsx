@@ -10,7 +10,7 @@ export function Nav() {
 
   return (
     <nav className="border-b border-border/60">
-      <div className="max-w-3xl mx-auto px-6 py-5">
+      <div className="max-w-2xl mx-auto px-6 py-5">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-70 transition-opacity duration-200">
             <Telescope className="w-5 h-5 text-primary" strokeWidth={1.5} />
@@ -20,6 +20,12 @@ export function Nav() {
           <div className="flex items-center gap-1">
             {isSignedIn ? (
               <>
+                <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-white font-normal">
+                  <Link href="/research" className="flex items-center gap-2">
+                    <Telescope className="w-4 h-4" strokeWidth={1.5} />
+                    Research
+                  </Link>
+                </Button>
                 <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-white font-normal">
                   <Link href="/dashboard" className="flex items-center gap-2">
                     <LayoutDashboard className="w-4 h-4" strokeWidth={1.5} />

@@ -59,11 +59,26 @@ export async function getUserResearchSessions(userId: string) {
   return sessions;
 }
 
-export async function deleteResearchSession(id: number) {
+export async function deleteResearchSession(id: number, userId: string) {
+  // First fetch to verify ownership before deleting
   const [session] = await db
+    .select()
+    .from(researchSessions)
+    .where(eq(researchSessions.id, id))
+    .limit(1);
+
+  if (!session) {
+    return null;
+  }
+
+  if (session.userId !== userId) {
+    throw new Error('Unauthorized: You can only delete your own research sessions');
+  }
+
+  const [deleted] = await db
     .delete(researchSessions)
     .where(eq(researchSessions.id, id))
     .returning();
 
-  return session;
+  return deleted;
 }

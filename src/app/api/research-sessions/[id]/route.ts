@@ -18,11 +18,19 @@ export async function DELETE(
       );
     }
 
-    await deleteResearchSession(sessionId);
+    await deleteResearchSession(sessionId, user.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting research session:', error);
+    
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 403 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Failed to delete research session' },
       { status: 500 }

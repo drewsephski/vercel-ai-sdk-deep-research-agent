@@ -2,6 +2,7 @@
 
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { ResearchSteps } from "./ResearchSteps";
 
 export type ProgressSectionProps = {
   status: string;
@@ -12,24 +13,39 @@ export type ProgressSectionProps = {
   finalUrl?: string;
 };
 
+const STATUS_TIPS = [
+  "Synthesizing sources across the web...",
+  "Cross-checking citations for accuracy...",
+  "Evaluating source quality and relevance...",
+  "Building your comprehensive report...",
+  "Structuring findings for clarity...",
+];
+
 export function ProgressSection({
   progress,
   status,
   message,
   prompt,
 }: ProgressSectionProps) {
+  const tipIndex = Math.min(
+    Math.floor(((progress ?? 0) / 100) * STATUS_TIPS.length),
+    STATUS_TIPS.length - 1
+  );
+
   return (
-    <div className="w-full space-y-5 animate-fade-up">
+    <div className="w-full space-y-8 animate-fade-up">
       <div className="text-center space-y-2">
-        <h2 className="text-xl font-semibold tracking-tight">Researching...</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Building your report...</h2>
         <p className="text-muted-foreground text-[15px] leading-relaxed max-w-lg mx-auto">
           {prompt}
         </p>
       </div>
 
+      <ResearchSteps progress={progress ?? 0} status={status} />
+
       <div className="space-y-3 max-w-md mx-auto">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground font-medium">{message || " "}</span>
+          <span className="text-muted-foreground font-medium">{message || STATUS_TIPS[tipIndex]}</span>
           <Badge variant="secondary" className="text-xs font-medium capitalize gap-1.5">
             {status === "EXECUTING" && (
               <span className="w-1.5 h-1.5 rounded-full bg-primary/70 animate-pulse" />

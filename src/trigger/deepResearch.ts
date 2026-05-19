@@ -311,6 +311,7 @@ export const deepResearch = async (
 
     try {
       const rawResults = await searchWeb(query);
+      context.completedQueries.add(query);
       if (rawResults.length === 0) return [];
 
       const existingUrls = new Set(context.searchResults.map(r => r.url));
@@ -356,7 +357,6 @@ export const deepResearch = async (
 
       const learnings = await generateLearnings(context.query, searchResult);
       context.learnings.push(learnings);
-      context.completedQueries.add(context.query);
     } catch (error) {
       console.error(`Learning generation failed for ${searchResult.url}:`, error);
       continue;
@@ -368,16 +368,25 @@ Previous search queries: ${Array.from(context.completedQueries).slice(-5).join("
 Key findings: ${context.learnings.slice(-3).map(l => l.learning).join("; ")}`;
 
   try {
-    await deepResearch(
+    const recursiveResult = await deepResearch(
       { ...context, query: newQuery },
       depth - 1,
       Math.ceil(breadth / 2),
       totalDepth,
       currentProgress,
     );
+
+    // Merge deeper results back into current context
+    context.queries.push(...recursiveResult.queries);
+    context.searchResults.push(...recursiveResult.searchResults);
+    context.learnings.push(...recursiveResult.learnings);
+    for (const q of recursiveResult.completedQueries) {
+      context.completedQueries.add(q);
+    }
   } catch (error) {
     console.error(`Deep research recursion failed:`, error);
   }
+
   return {
     query: context.query,
     queries: context.queries,
@@ -430,26 +439,40 @@ type SearchResult = {
   depth?: number;
 };
 
-const searchWeb = async (query: string) => {
-  const { results } = await exa.searchAndContents(query, {
-    numResults: 3, // Increased from 1 for better coverage per research recommendations
-    livecrawl: "always",
-    type: "auto", // Let Exa choose best content type
-  });
+const searchWeb = async (query: string): Promise<SearchResult[]> => {
+  try {
+    if (!process.env.EXA_API_KEY) {
+      console.error("EXA_API_KEY is not configured");
+      return [];
+    }
 
-  // Deduplicate by URL to avoid redundant results
-  const uniqueResults = Array.from(
-    new Map(results.map(r => [r.url, r])).values()
-  );
+    const { results } = await exa.searchAndContents(query, {
+      numResults: 3,
+      livecrawl: "always",
+      type: "auto",
+    });
 
-  return uniqueResults.map(
-    (r) =>
-      ({
-        title: r.title,
-        url: r.url,
-        content: r.text,
-      }) as SearchResult,
-  );
+    if (!results || results.length === 0) {
+      return [];
+    }
+
+    // Deduplicate by URL to avoid redundant results
+    const uniqueResults = Array.from(
+      new Map(results.map(r => [r.url, r])).values()
+    );
+
+    return uniqueResults.map(
+      (r) =>
+        ({
+          title: r.title || "Untitled",
+          url: r.url,
+          content: r.text || "",
+        }) as SearchResult,
+    );
+  } catch (error) {
+    console.error(`Exa search failed for "${query}":`, error);
+    return [];
+  }
 };
 
 // Evaluate source quality using AI SDK generateObject

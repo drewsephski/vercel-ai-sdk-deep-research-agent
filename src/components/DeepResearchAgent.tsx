@@ -3,13 +3,14 @@
 import { ClarifyingChat } from "@/components/ClarifyingChat";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProgressSection } from "@/components/progress-section";
+import { ResearchComplete } from "@/components/ResearchComplete";
 import { PaywallModal } from "@/components/PaywallModal";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useRealtimeTaskTrigger } from "@trigger.dev/react-hooks";
-import { Search, Telescope, FileText, Layers, GitBranch, CreditCard } from "lucide-react";
+import { Search, Telescope, Layers, GitBranch, CreditCard, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useUser } from "@clerk/nextjs";
@@ -127,7 +128,7 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
     e.preventDefault();
 
     if (prompt.length < 30) {
-      setPromptError("Research prompt must be at least 30 characters.");
+      setPromptError("Give us a bit more to work with — 30 characters minimum.");
       return;
     }
 
@@ -154,6 +155,15 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
 
   const handleBack = () => {
     setPhase("input");
+    setRefinedPrompt("");
+  };
+
+  const handleReset = () => {
+    setPhase("input");
+    setPrompt("");
+    setRefinedPrompt("");
+    setPromptError(null);
+    triggerInstance.reset?.();
   };
 
   const isSubmitDisabled = prompt.length < 30 || prompt.length > 1000;
@@ -170,10 +180,10 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
                 <Telescope className="w-5 h-5 text-primary" strokeWidth={1.5} />
               </div>
               <h1 className="text-[28px] font-semibold tracking-tight text-foreground mb-2">
-                What would you like to research?
+                What do you need to know?
               </h1>
               <p className="text-muted-foreground text-[15px] leading-relaxed max-w-md mx-auto">
-                Describe a topic or question in detail. Our agent will synthesize sources, analyze findings, and deliver a comprehensive report.
+                Enter any topic. We will source, verify, and synthesize a comprehensive report with citations — delivered as a PDF.
               </p>
             </div>
 
@@ -192,6 +202,24 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
               </div>
 
               {/* Depth and Breadth Sliders */}
+              {subscriptionLoading && user && (
+                <div className="space-y-5 p-4 rounded-lg bg-muted/30 border border-border/50 animate-pulse">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="h-4 w-24 bg-muted rounded" />
+                    <div className="h-4 w-32 bg-muted rounded" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="h-4 w-20 bg-muted rounded" />
+                      <div className="h-2 w-full bg-muted rounded" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-4 w-20 bg-muted rounded" />
+                      <div className="h-2 w-full bg-muted rounded" />
+                    </div>
+                  </div>
+                </div>
+              )}
               {!subscriptionLoading && subscription && (
                 <div className="space-y-5 p-4 rounded-lg bg-muted/30 border border-border/50">
                   <div className="flex items-center justify-between text-sm">
@@ -278,9 +306,6 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <p className="text-sm text-muted-foreground">
-                    Minimum 30 characters required
-                  </p>
                   {freeCredits !== null && (
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
                       <CreditCard className="w-3.5 h-3.5 text-primary" strokeWidth={1.5} />
@@ -297,6 +322,7 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
                 >
                   <Search className="w-4 h-4 mr-2" strokeWidth={1.5} />
                   Continue
+                  <ArrowRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
                 </Button>
               </div>
             </form>
@@ -323,42 +349,41 @@ export function DeepResearchAgent({ triggerToken }: { triggerToken: string }) {
         )}
 
         {phase === "research" && run && run.status === "COMPLETED" && (
-          <div className="text-center space-y-6 animate-fade-up">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/5 mb-2">
-              <FileText className="w-5 h-5 text-primary" strokeWidth={1.5} />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold tracking-tight">Research Complete</h2>
-              <p className="text-muted-foreground text-[15px] max-w-lg mx-auto leading-relaxed">
-                Your report on <span className="text-foreground font-medium">&ldquo;{displayPrompt}&rdquo;</span> is ready.
-              </p>
-            </div>
-            <Button asChild className="font-medium px-5">
-              <a
-                href={`${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${pdfTitle}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <FileText className="w-4 h-4 mr-2" strokeWidth={1.5} />
-                View Report
-              </a>
-            </Button>
-          </div>
+          <ResearchComplete
+            prompt={displayPrompt}
+            pdfUrl={`${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${pdfTitle}`}
+            onNewResearch={handleReset}
+          />
         )}
 
         {phase === "research" && run?.status === "FAILED" && (
-          <div className="text-center space-y-4 animate-fade-up">
-            <h2 className="text-xl font-semibold text-destructive">Research Failed</h2>
-            <p className="text-muted-foreground text-[15px]">
-              The research could not be completed. You can try again with a different prompt.
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => window.location.reload()}
-              className="font-medium"
-            >
-              Try Again
-            </Button>
+          <div className="text-center space-y-5 animate-fade-up max-w-md mx-auto">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-destructive/5">
+              <svg className="w-6 h-6 text-destructive" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold tracking-tight">We could not finish this run</h2>
+              <p className="text-muted-foreground text-[15px] leading-relaxed">
+                This sometimes happens with complex queries or temporary connection issues. Your credits were not charged.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                className="font-medium"
+              >
+                Edit Query
+              </Button>
+              <Button
+                onClick={handleReset}
+                className="font-medium"
+              >
+                Try Again
+              </Button>
+            </div>
           </div>
         )}
 

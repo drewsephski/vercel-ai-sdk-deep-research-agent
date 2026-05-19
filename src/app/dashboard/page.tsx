@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   const freeCredits = await getUserFreeCredits(user.id);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="max-w-3xl mx-auto p-6 space-y-8">
         {/* Subscription Banner */}
         {subscription ? (
@@ -36,18 +36,20 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                {subscription.plan !== 'power' && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link href="/pricing">Upgrade</Link>
-                  </Button>
-                )}
-                {subscription.stripeCustomerId && (
-                  <form action="/api/portal" method="POST">
-                    <Button size="sm" variant="ghost">
-                      Manage Billing
+                <div className="flex items-center gap-2">
+                  {subscription.plan !== 'power' && (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href="/pricing">Upgrade</Link>
                     </Button>
-                  </form>
-                )}
+                  )}
+                  {subscription.stripeCustomerId && (
+                    <form action="/api/portal" method="POST">
+                      <Button size="sm" variant="ghost">
+                        Manage Billing
+                      </Button>
+                    </form>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -80,7 +82,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           <Button asChild>
-            <Link href="/">
+            <Link href="/research">
               <ArrowLeft className="w-4 h-4 mr-2" />
               New Research
             </Link>
@@ -90,13 +92,15 @@ export default async function DashboardPage() {
         {sessions.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="w-12 h-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No research sessions yet</h3>
-              <p className="text-muted-foreground text-center mb-6">
-                Start your first deep research to see it appear here.
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/5 mb-4">
+                <FileText className="w-6 h-6 text-primary" strokeWidth={1.5} />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Your research library is waiting</h3>
+              <p className="text-muted-foreground text-center mb-6 max-w-sm">
+                Run your first report and it will appear here with full access to PDFs, source citations, and session history.
               </p>
               <Button asChild>
-                <Link href="/">Start Research</Link>
+                <Link href="/research">Run your first report &rarr;</Link>
               </Button>
             </CardContent>
           </Card>
@@ -135,7 +139,7 @@ export default async function DashboardPage() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground line-clamp-1">
-                      {session.report && parse(session.report.substring(0, 300) + '...')}
+                      {session.report ? parse(session.report.substring(0, 300) + '...') : 'No report generated'}
                     </div>
                     <div className="flex items-center gap-2">
                       {session.pdfUrl && (

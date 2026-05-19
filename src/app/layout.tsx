@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Nav } from "@/components/nav";
+import { Footer } from "@/components/Footer";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -16,8 +17,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Deep Research Agent",
-  description: "AI-powered deep research that synthesizes comprehensive reports from any topic.",
+  title: "Deep Research — Publication-Grade Reports in Minutes",
+  description: "Get comprehensive, citation-backed research reports on any topic. AI-powered synthesis with source quality evaluation and PDF delivery.",
 };
 
 export default function RootLayout({
@@ -28,9 +29,10 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-        <body className="antialiased min-h-screen flex flex-col">
+        <body className="antialiased min-h-screen flex flex-col bg-background text-foreground">
           <Nav />
           <main className="flex-1">{children}</main>
+          <Footer />
         </body>
       </html>
     </ClerkProvider>

@@ -10,13 +10,13 @@ const tiers = [
   {
     name: 'Free',
     price: '$0',
-    description: 'Try deep research with 3 free credits',
+    description: 'Explore the product with 3 research credits',
     icon: FileText,
     features: [
-      '3 free research credits (one-time)',
+      '3 research credits (one-time)',
       'Depth: 1 level',
       'Breadth: 2 parallel searches',
-      'Basic PDF reports',
+      'Standard PDF reports',
     ],
     cta: 'Current Plan',
     current: true,
@@ -25,14 +25,14 @@ const tiers = [
     name: 'Pro',
     price: '$15',
     period: '/month',
-    description: 'For professionals who need deeper research',
+    description: 'Perfect for 1–2 research projects per week',
     icon: Zap,
     features: [
       '20 research sessions per month',
       'Depth: 3 levels',
       'Breadth: 5 parallel searches',
       'Priority processing',
-      'Advanced PDF reports',
+      'Advanced PDF reports with citations',
     ],
     cta: 'Upgrade to Pro',
     planId: 'pro',
@@ -42,15 +42,15 @@ const tiers = [
     name: 'Power',
     price: '$39',
     period: '/month',
-    description: 'Maximum depth for analysts and researchers',
+    description: 'For teams doing daily competitive analysis',
     icon: Crown,
     features: [
       'Unlimited research sessions',
       'Depth: 5 levels (maximum)',
       'Breadth: 10 parallel searches',
       'Priority processing',
-      'Advanced PDF reports',
-      'Priority support',
+      'Advanced PDF reports with citations',
+      'Priority email support',
     ],
     cta: 'Upgrade to Power',
     planId: 'power',
@@ -86,11 +86,11 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="max-w-5xl mx-auto p-6 py-16">
         <div className="text-center mb-12">
           <Button asChild variant="ghost" className="mb-6">
-            <Link href="/">
+            <Link href="/research">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Research
             </Link>
@@ -162,10 +162,59 @@ export default function PricingPage() {
           })}
         </div>
 
-        <div className="mt-12 text-center">
-          <p className="text-muted-foreground text-sm">
-            All plans include AI-powered research synthesis, source quality evaluation, and PDF report generation.
+        {/* Trust signals */}
+        <div className="mt-12 text-center space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Cancel anytime. No long-term contracts. Your data stays private.
           </p>
+          <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-primary" />
+              Secure Stripe billing
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-primary" />
+              Instant cancellation
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-primary" />
+              Email support
+            </span>
+          </div>
+        </div>
+
+        {/* FAQ */}
+        <div className="mt-16 max-w-2xl mx-auto">
+          <h2 className="text-2xl font-bold text-center mb-8">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            {[
+              {
+                q: 'What counts as a research session?',
+                a: 'One session is a complete research run from query to PDF delivery. Each session consumes one credit from your monthly allowance.',
+              },
+              {
+                q: 'Can I export or share my reports?',
+                a: 'Yes. Every report is delivered as a downloadable PDF with a permanent link you can share with colleagues or clients.',
+              },
+              {
+                q: 'Do you store my research topics?',
+                a: 'We retain session history so you can re-download reports. You can delete any session at any time from your dashboard.',
+              },
+              {
+                q: 'What happens if I cancel?',
+                a: 'You keep access until the end of your billing period, then revert to the Free plan. Your past reports remain accessible.',
+              },
+              {
+                q: 'Is there a refund policy?',
+                a: 'If you are unsatisfied, contact us within 7 days of your first payment for a full refund — no questions asked.',
+              },
+            ].map((faq) => (
+              <div key={faq.q} className="rounded-lg border bg-card p-5">
+                <h3 className="font-semibold text-sm mb-1">{faq.q}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -190,7 +190,12 @@ export async function handleWebhookEvent(event: Stripe.Event) {
       
       // Get subscription details from Stripe
       const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
-      const priceId = stripeSubscription.items.data[0].price.id;
+      const priceId = stripeSubscription.items?.data?.[0]?.price?.id;
+
+      if (!priceId) {
+        console.error('No price found in subscription:', subscriptionId);
+        break;
+      }
       
       // Determine plan based on price
       let plan: Plan = 'starter';

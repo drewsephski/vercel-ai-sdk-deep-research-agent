@@ -8,6 +8,7 @@ import {
 import { useChat } from "@ai-sdk/react";
 import { CheckCircle2, ChevronRight, Lightbulb, Sparkles, AlertCircle, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
+import { QuestionFlow } from "@/components/tool-ui/runtime-provider";
 
 interface ClarifyingChatProps {
   initialPrompt: string;
@@ -20,7 +21,12 @@ export function ClarifyingChat({
   onResearchStart,
   onBack,
 }: ClarifyingChatProps) {
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
+  const [currentQuestion, setCurrentQuestion] = useState<{
+    toolCallId: string;
+    question: string;
+    options: { id: string; label: string }[];
+    allowsMultiple: boolean;
+  } | null>(null);
   const [submittedToolCallIds, setSubmittedToolCallIds] = useState<Set<string>>(new Set());
   const [finalPlan, setFinalPlan] = useState<{
     refinedPrompt: string;
@@ -66,7 +72,7 @@ export function ClarifyingChat({
   useEffect(() => {
     const saved = loadFromLocalStorage(STORAGE_KEY);
     if (saved) {
-      if (saved.selectedOptions) setSelectedOptions(saved.selectedOptions);
+      if (saved.currentQuestion) setCurrentQuestion(saved.currentQuestion);
       if (saved.submittedToolCallIds) setSubmittedToolCallIds(new Set(saved.submittedToolCallIds));
       if (saved.finalPlan) setFinalPlan(saved.finalPlan);
       if (saved.questionCount) setQuestionCount(saved.questionCount);
@@ -75,15 +81,15 @@ export function ClarifyingChat({
 
   // Auto-save state to localStorage when it changes
   useEffect(() => {
-    if (selectedOptions) {
+    if (currentQuestion) {
       saveToLocalStorage(STORAGE_KEY, {
-        selectedOptions,
+        currentQuestion,
         submittedToolCallIds: Array.from(submittedToolCallIds),
         finalPlan,
         questionCount,
       });
     }
-  }, [selectedOptions, submittedToolCallIds, finalPlan, questionCount, STORAGE_KEY]);
+  }, [currentQuestion, submittedToolCallIds, finalPlan, questionCount, STORAGE_KEY]);
 
   // Clear localStorage when research starts or user goes back
   useEffect(() => {
@@ -123,9 +129,10 @@ export function ClarifyingChat({
       output: skipMessage,
     });
     setSubmittedToolCallIds((prev) => new Set(prev).add(toolCallId));
+    setCurrentQuestion(null);
   };
 
-  // Track question count from messages
+  // Track question count from messages and detect new questions
   useEffect(() => {
     const questionToolCalls = messages.flatMap((m) =>
       m.parts.filter((p) => p.type === "tool-askClarifyingQuestion")
@@ -134,7 +141,32 @@ export function ClarifyingChat({
     if (currentQuestionCount > questionCount) {
       setQuestionCount(currentQuestionCount);
     }
-  }, [messages, questionCount]);
+
+    // Find the most recent unanswered question
+    for (const message of [...messages].reverse()) {
+      for (const part of message.parts) {
+        if (
+          part.type === "tool-askClarifyingQuestion" &&
+          (part.state === "input-available" || part.state === "input-streaming") &&
+          !submittedToolCallIds.has(part.toolCallId) &&
+          !currentQuestion
+        ) {
+          const input = part.input as {
+            question: string;
+            options: { id: string; label: string }[];
+            allowsMultiple: boolean;
+          };
+          setCurrentQuestion({
+            toolCallId: part.toolCallId,
+            question: input.question,
+            options: input.options,
+            allowsMultiple: input.allowsMultiple,
+          });
+          return;
+        }
+      }
+    }
+  }, [messages, questionCount, submittedToolCallIds, currentQuestion]);
 
   const isLoading = status === "submitted" || status === "streaming";
 
@@ -212,42 +244,21 @@ export function ClarifyingChat({
     );
   }
 
-  const handleOptionToggle = (
-    toolCallId: string,
-    optionId: string,
-    allowsMultiple: boolean
-  ) => {
-    setSelectedOptions((prev) => {
-      const current = prev[toolCallId] || [];
-      if (allowsMultiple) {
-        const next = current.includes(optionId)
-          ? current.filter((id) => id !== optionId)
-          : [...current, optionId];
-        return { ...prev, [toolCallId]: next };
-      }
-      return { ...prev, [toolCallId]: [optionId] };
-    });
-  };
+  const handleQuestionFlowComplete = (optionIds: string[]) => {
+    if (!currentQuestion) return;
 
-  const handleSubmitAnswer = (
-    toolCallId: string,
-    question: string,
-    allowsMultiple: boolean
-  ) => {
-    const selected = selectedOptions[toolCallId] || [];
-    if (selected.length === 0) return;
-
-    const answerText = allowsMultiple
-      ? `For "${question}", I selected: ${selected.join(", ")}`
-      : `For "${question}", I selected: ${selected[0]}`;
+    const answerText = currentQuestion.allowsMultiple
+      ? `For "${currentQuestion.question}", I selected: ${optionIds.join(", ")}`
+      : `For "${currentQuestion.question}", I selected: ${optionIds[0]}`;
 
     addToolOutput({
       tool: "askClarifyingQuestion",
-      toolCallId,
+      toolCallId: currentQuestion.toolCallId,
       output: answerText,
     });
 
-    setSubmittedToolCallIds((prev) => new Set(prev).add(toolCallId));
+    setSubmittedToolCallIds((prev) => new Set(prev).add(currentQuestion.toolCallId));
+    setCurrentQuestion(null);
   };
 
   // Detect finalizeResearchPlan tool result
@@ -341,10 +352,10 @@ export function ClarifyingChat({
           <Lightbulb className="w-5 h-5 text-primary" strokeWidth={1.5} />
         </div>
         <h2 className="text-xl font-semibold tracking-tight">
-          Narrowing Your Focus
+          Tailoring your report
         </h2>
         <p className="text-muted-foreground text-sm max-w-md mx-auto">
-          To deliver the most relevant research, answer a few quick questions about what you need.
+          Answer a few quick questions so we can focus the research on what matters most to you.
         </p>
       </div>
 
@@ -388,7 +399,6 @@ export function ClarifyingChat({
                       options: { id: string; label: string }[];
                       allowsMultiple: boolean;
                     };
-                    const selected = selectedOptions[callId] || [];
 
                     if (isSubmitted) {
                       return (
@@ -400,96 +410,30 @@ export function ClarifyingChat({
                             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                             {input.question}
                           </div>
-                          <p className="text-sm text-muted-foreground pl-6">
-                            {selected.join(", ")}
-                          </p>
                         </div>
                       );
                     }
 
-                    return (
-                      <div
-                        key={callId}
-                        className="rounded-xl border bg-card p-5 space-y-4 animate-fade-in"
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                            Question {questionCount} of {totalQuestions}
-                          </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs text-muted-foreground hover:text-white"
-                            onClick={() => handleSkipQuestion(callId, input.question)}
-                          >
-            Skip
-          </Button>
-        </div>
+                    // Render QuestionFlow for the current active question
+                    if (currentQuestion && currentQuestion.toolCallId === callId) {
+                      return (
+                        <QuestionFlow
+                          key={callId}
+                          id={`clarify-${callId}`}
+                          step={questionCount}
+                          title={input.question}
+                          options={input.options.map((opt) => ({
+                            id: opt.id,
+                            label: opt.label,
+                          }))}
+                          selectionMode={input.allowsMultiple ? "multi" : "single"}
+                          onSelect={handleQuestionFlowComplete}
+                          onBack={onBack}
+                        />
+                      );
+                    }
 
-                        <p className="text-sm font-medium">{input.question}</p>
-
-                        <div className="space-y-2">
-                          {input.options.map((option) => {
-                            const isSelected = selected.includes(option.id);
-                            return (
-                              <button
-                                key={option.id}
-                                onClick={() =>
-                                  handleOptionToggle(
-                                    callId,
-                                    option.id,
-                                    input.allowsMultiple
-                                  )
-                                }
-                                className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-all ${
-                                  isSelected
-                                    ? "border-primary bg-primary/5 text-primary font-medium"
-                                    : "border-border hover:border-primary/30 hover:bg-muted/50"
-                                }`}
-                              >
-                                <div
-                                  className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
-                                    isSelected
-                                      ? "border-primary bg-primary"
-                                      : "border-muted-foreground/30"
-                                  }`}
-                                >
-                                  {isSelected && (
-                                    <CheckCircle2 className="w-3 h-3 text-primary-foreground" />
-                                  )}
-                                </div>
-                                {option.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="hover:text-white"
-                            onClick={() => handleSkipQuestion(callId, input.question)}
-                          >
-            Skip
-          </Button>
-                          <Button
-                            size="sm"
-                            disabled={selected.length === 0 || isLoading}
-                            onClick={() =>
-                              handleSubmitAnswer(
-                                callId,
-                                input.question,
-                                input.allowsMultiple
-                              )
-                            }
-                          >
-                            Answer
-                            <ChevronRight className="w-4 h-4 ml-1" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
+                    return null;
                   }
 
                   default:
